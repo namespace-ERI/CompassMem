@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-基于层次化图的多轮检索问答系统 - V3 改进版
-支持两阶段检索策略 + 三动作机制 + 多节点队列管理
+Hierarchical graph-based multi-round retrieval QA system - V3 improved version
+Supports two-stage retrieval strategy + three-action mechanism + multi-node queue management
 
-主要改进（V3相较于V2）：
-1. **改进的两阶段检索策略**：
-   - 阶段1：检索大量候选节点（如top-50或top-100）
-   - 阶段2：取前top5节点直接加入探索队列
-   - 阶段3：继续遍历检索结果，按顺序收集聚类ID（去重），直到得到top3个聚类
-   - 阶段4：从这些聚类中使用LLM选择成员节点
-   - 阶段5：所有节点加入队列，开始多路径探索
-2. 不再依赖聚类中心embedding的精确度
-3. 提高召回率，降低首次定位的误判
+Main improvements (V3 vs V2):
+1. **Improved two-stage retrieval strategy**:
+   - Stage 1: Retrieve large candidate nodes (e.g., top-50 or top-100)
+   - Stage 2: Take top-5 nodes directly into exploration queue
+   - Stage 3: Continue traversing retrieval results, collect cluster IDs in order (deduplicated), until getting top-3 clusters
+   - Stage 4: Use LLM to select member nodes from these clusters
+   - Stage 5: All nodes join queue, start multi-path exploration
+2. No longer depends on accuracy of cluster center embeddings
+3. Improves recall rate, reduces false positives in initial localization
 
-使用场景：
-- 当聚类中心embedding不够精确时
-- 需要更高的召回率时
-- 希望首次定位更准确时
+Use cases:
+- When cluster center embeddings are not precise enough
+- When higher recall rate is needed
+- When more accurate initial localization is desired
 """
 
 import json
@@ -32,16 +32,16 @@ from typing import List, Dict, Any, Optional, Set
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
-# 导入层次化模块
+# Import hierarchical modules
 from hierarchical_graph_loader import HierarchicalGraphLoader
 from hierarchical_embedding_manager_v3 import HierarchicalEmbeddingManagerV3
 from cluster_explorer import ClusterExplorer
 
-# 导入原有模块
+# Import original modules
 from conversation_manager import ConversationManager
 from debug_logger import DebugLogger
 
-# 导入V2新模块（队列版本+ 并发）
+# Import V2 new modules (queue version + concurrent)
 from llm_handler_v2_queue import LLMHandlerV2Queue
 from context_formatter_v2 import ContextFormatterV2
 from multi_path_explorer_v2_queue import (
@@ -51,22 +51,22 @@ from multi_path_explorer_v2_queue import (
     SharedExplorationState
 )
 
-# 设置日志
+# Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
 class HierarchicalGraphQASystemV3:
-    """层次化图问答系统 - V3改进版（两阶段检索 + 三动作机制 + 多节点队列）"""
+    """Hierarchical graph QA system - V3 improved version (two-stage retrieval + three-action mechanism + multi-node queue)"""
     
     def __init__(self, 
-                 graphs_dir: str = "/share/project/zyt/hyy/Memory/build_graph/graphs_llm_clustered",
-                 qa_data_path: str = "/share/project/zyt/hyy/Memory/data/locomo/locomo10.json",
+                 graphs_dir: str = "./graphs_llm_clustered",
+                 qa_data_path: str = "./data/locomo10.json",
                  model_name: str = "Qwen/Qwen2.5-7B-Instruct",
-                 embedding_model: str = "/share/project/zyt/hyy/Model/bge-m3",
-                 top_k_nodes: int = 5,  # V3: 首次直接检索节点的数量
-                 top_k_per_cluster: int = 3,  # V3: 从每个聚类中选择的节点数量
-                 n_paths: int = 3,  # V3: 固定的探索路径数量
+                 embedding_model: str = "./models/bge-m3",
+                 top_k_nodes: int = 5,  # V3: Number of nodes for first direct retrieval
+                 top_k_per_cluster: int = 3,  # V3: Number of nodes to select per cluster
+                 n_paths: int = 3,  # V3: Fixed number of exploration paths
                  similarity_threshold: float = 0.7,
                  max_rounds: int = 3,
                  debug_mode: bool = False,
@@ -77,14 +77,14 @@ class HierarchicalGraphQASystemV3:
                  api_key: str = "EMPTY",
                  enable_refinement: bool = True,
                  use_relation: bool = True,
-                 enable_early_stopping: bool = False,  # V3.5新增：早停开关，默认关闭
-                 use_subgoal_planning: bool = True,  # V3.5新增：是否使用subgoal规划
-                 enable_concurrent: bool = False):  # V3.6新增：是否启用并发探索
-        """初始化层次化问答系统V3版本 - OpenAI API版本（支持并发）"""
+                 enable_early_stopping: bool = False,  # V3.5 new: Early stopping toggle, disabled by default
+                 use_subgoal_planning: bool = True,  # V3.5 new: Whether to use subgoal planning
+                 enable_concurrent: bool = False):  # V3.6 new: Whether to enable concurrent exploration
+        """Initialize hierarchical QA system V3 - OpenAI API version (supports concurrency)"""
         self.max_rounds = max_rounds
-        self.top_k_nodes = top_k_nodes  # V3新增
-        self.top_k_per_cluster = top_k_per_cluster  # V3新增
-        self.n_paths = n_paths  # V3新增：固定路径数量
+        self.top_k_nodes = top_k_nodes  # V3 new
+        self.top_k_per_cluster = top_k_per_cluster  # V3 new
+        self.n_paths = n_paths  # V3 new: Fixed path count
         self.debug_mode = debug_mode
         self.debug_items = debug_items
         self.debug_qa_per_item = debug_qa_per_item
@@ -93,11 +93,11 @@ class HierarchicalGraphQASystemV3:
         self.use_relation = use_relation
         self.api_base = api_base
         self.api_key = api_key
-        self.enable_early_stopping = enable_early_stopping  # V3.5新增
-        self.use_subgoal_planning = use_subgoal_planning  # V3.5新增
-        self.enable_concurrent = enable_concurrent  # V3.6新增
+        self.enable_early_stopping = enable_early_stopping  # V3.5 new
+        self.use_subgoal_planning = use_subgoal_planning  # V3.5 new
+        self.enable_concurrent = enable_concurrent  # V3.6 new
         
-        # 统计信息
+        # Statistics
         self.stats = {
             'total_questions': 0,
             'skipped_questions': 0,
@@ -105,51 +105,51 @@ class HierarchicalGraphQASystemV3:
             'total_paths': 0,
             'total_multi_node_selections': 0,
             'avg_nodes_per_selection': 0.0,
-            'total_direct_nodes': 0,  # V3新增：直接检索的节点数
-            'total_clusters_explored': 0,  # V3新增：探索的聚类数
-            'total_cluster_nodes': 0,  # V3新增：从聚类中选择的节点数
-            'avg_direct_node_similarity': 0.0,  # V3新增：直接检索节点的平均相似度
-            # Token统计
+            'total_direct_nodes': 0,  # V3 new: Number of directly retrieved nodes
+            'total_clusters_explored': 0,  # V3 new: Number of explored clusters
+            'total_cluster_nodes': 0,  # V3 new: Number of nodes selected from clusters
+            'avg_direct_node_similarity': 0.0,  # V3 new: Average similarity of directly retrieved nodes
+            # Token statistics
             'total_prompt_tokens': 0,
             'total_completion_tokens': 0,
             'total_tokens': 0,
             'llm_call_count': 0,
         }
         
-        # 记录all-skip案例的详细信息
+        # Record detailed information of all-skip cases
         self.all_skip_cases = []
         
-        # 初始化各个管理器
-        logger.info("初始化层次化系统V3组件...")
+        # Initialize managers
+        logger.info("Initializing hierarchical system V3 components...")
         
-        # 层次化图数据加载器
+        # Hierarchical graph data loader
         self.graph_loader = HierarchicalGraphLoader(graphs_dir)
         
-        # 对话数据管理器
+        # Conversation data manager
         self.conversation_manager = ConversationManager(qa_data_path)
         
-        # 层次化Embedding管理器V3
+        # Hierarchical Embedding manager V3
         self.embedding_manager = HierarchicalEmbeddingManagerV3(
             embedding_model, 
             embedding_gpu_id, 
             similarity_threshold
         )
         
-        # LLM处理器V2 Queue版本 - OpenAI API版本
+        # LLM handler V2 Queue version - OpenAI API version
         self.llm_handler = LLMHandlerV2Queue(
             model_name, 
             api_base, 
             api_key
         )
         
-        # 上下文格式化器V2
+        # Context formatter V2
         self.context_formatter = ContextFormatterV2(
             self.conversation_manager,
             self.graph_loader,
             use_relation
         )
         
-        # 聚类探索器（用于辅助选择）
+        # Cluster explorer (for auxiliary selection)
         self.cluster_explorer = ClusterExplorer(
             self.graph_loader,
             self.embedding_manager,
@@ -157,7 +157,7 @@ class HierarchicalGraphQASystemV3:
             self.context_formatter
         )
         
-        # 多路探索器V2 Queue版本
+        # Multi-path explorer V2 Queue version
         self.multi_path_explorer = MultiPathExplorerV2Queue(
             self.graph_loader,
             self.embedding_manager,
@@ -166,39 +166,39 @@ class HierarchicalGraphQASystemV3:
             max_rounds
         )
         
-        # 调试日志器
+        # Debug logger
         self.debug_logger = DebugLogger(debug_mode)
         
-        # 加载QA数据
+        # Load QA data
         self.qa_data = self._load_qa_data()
         
-        # 显示GPU内存使用情况（仅Embedding模型）
+        # Display GPU memory usage (Embedding model only)
         self._log_gpu_memory_usage(embedding_gpu_id)
         
-        logger.info(f"=== V3 改进版参数 ===")
-        logger.info(f"首次直接检索节点数 (top_k_nodes): {top_k_nodes}")
-        logger.info(f"每个聚类选择节点数 (top_k_per_cluster): {top_k_per_cluster}")
-        logger.info(f"最大探索轮数: {max_rounds}")
+        logger.info(f"=== V3 Improved Version Parameters ===")
+        logger.info(f"First direct retrieval node count (top_k_nodes): {top_k_nodes}")
+        logger.info(f"Nodes selected per cluster (top_k_per_cluster): {top_k_per_cluster}")
+        logger.info(f"Maximum exploration rounds: {max_rounds}")
         logger.info(f"LLM API Base: {api_base}")
         logger.info(f"LLM Model: {model_name}")
-        logger.info(f"====================")
+        logger.info(f"=======================================")
     
     def _load_qa_data(self) -> List[Dict[str, Any]]:
-        """加载QA数据"""
-        logger.info(f"加载QA数据: {self.qa_data_path}")
+        """Load QA data"""
+        logger.info(f"Loading QA data: {self.qa_data_path}")
         with open(self.qa_data_path, 'r', encoding='utf-8') as f:
             qa_data = json.load(f)
-        logger.info(f"加载了 {len(qa_data)} 个QA项")
+        logger.info(f"Loaded {len(qa_data)} QA items")
         return qa_data
     
     def _log_gpu_memory_usage(self, embedding_gpu_id: int):
-        """记录GPU内存使用情况（仅Embedding模型）"""
+        """Log GPU memory usage (Embedding model only)"""
         if torch.cuda.is_available():
-            logger.info("=== GPU内存使用情况 ===")
-            logger.info(f"Embedding模型使用GPU: {embedding_gpu_id}")
-            logger.info(f"LLM模型: 通过API调用（后端部署）")
+            logger.info("=== GPU Memory Usage ===")
+            logger.info(f"Embedding model uses GPU: {embedding_gpu_id}")
+            logger.info(f"LLM model: Called via API (backend deployment)")
             
-            # 只显示embedding GPU的信息
+            # Only show embedding GPU information
             if embedding_gpu_id < torch.cuda.device_count():
                 i = embedding_gpu_id
                 gpu_name = torch.cuda.get_device_name(i)
@@ -208,13 +208,13 @@ class HierarchicalGraphQASystemV3:
                 memory_free = memory_total - memory_reserved
                 
                 logger.info(f"GPU {i} ({gpu_name}) [Embedding]:")
-                logger.info(f"  总内存: {memory_total:.2f} GB")
-                logger.info(f"  已分配: {memory_allocated:.2f} GB ({memory_allocated/memory_total*100:.1f}%)")
-                logger.info(f"  已保留: {memory_reserved:.2f} GB ({memory_reserved/memory_total*100:.1f}%)")
-                logger.info(f"  可用: {memory_free:.2f} GB ({memory_free/memory_total*100:.1f}%)")
+                logger.info(f"  Total memory: {memory_total:.2f} GB")
+                logger.info(f"  Allocated: {memory_allocated:.2f} GB ({memory_allocated/memory_total*100:.1f}%)")
+                logger.info(f"  Reserved: {memory_reserved:.2f} GB ({memory_reserved/memory_total*100:.1f}%)")
+                logger.info(f"  Free: {memory_free:.2f} GB ({memory_free/memory_total*100:.1f}%)")
     
     def answer_question(self, question: str, item_id: str, category: int = None) -> Dict[str, Any]:
-        """使用V3两阶段检索策略回答问题"""
+        """Answer question using V3 two-stage retrieval strategy"""
         start_time = time.time()
         
         logger.info(f"Processing question: {question[:80]}... (graph: {item_id})")
@@ -226,7 +226,7 @@ class HierarchicalGraphQASystemV3:
                    f"Early Stopping: {'Enabled' if self.enable_early_stopping else 'Disabled'}, "
                    f"Concurrent: {'Enabled' if self.enable_concurrent else 'Disabled'}")
         
-        # V3.5新增：使用planner生成subgoals
+        # V3.5 new: Use planner to generate subgoals
         subgoals = []
         planner_raw_response = ""
         if self.use_subgoal_planning:
@@ -238,10 +238,10 @@ class HierarchicalGraphQASystemV3:
             except Exception as e:
                 logger.error(f"Planner error: {e}, proceeding without subgoal tracking")
         
-        # 加载对应的图
+        # Load corresponding graph
         graph = self.graph_loader.load_graph(item_id)
         
-        # 检查图是否包含聚类信息
+        # Check if graph contains cluster information
         if not graph.get('cluster_nodes'):
             logger.error(f"Graph {item_id} does not contain cluster nodes!")
             return {
@@ -252,16 +252,16 @@ class HierarchicalGraphQASystemV3:
                 'error': 'No cluster nodes in graph'
             }
         
-        # 两阶段检索策略（传入subgoals和category）
+        # Two-stage retrieval strategy (pass subgoals and category)
         result = self._answer_with_two_stage_retrieval(
             question, graph, item_id, subgoals, category
         )
         
-        # 添加subgoal相关信息到结果
+        # Add subgoal-related information to result
         result['subgoals'] = subgoals
         result['planner_response'] = planner_raw_response
         
-        # 记录用时
+        # Record elapsed time
         elapsed_time = time.time() - start_time
         result['elapsed_time_seconds'] = round(elapsed_time, 2)
         logger.info(f"✅ Question answered in {elapsed_time:.2f} seconds")
@@ -273,19 +273,19 @@ class HierarchicalGraphQASystemV3:
                                      cluster: Dict[str, Any],
                                      graph: Dict[str, Any],
                                      item_id: str) -> List[Dict[str, Any]]:
-        """从单个聚类中使用 LLM 选择多个成员节点（基于 summary）
+        """Select multiple member nodes from a single cluster using LLM (based on summary)
         
-        这是从V2复制的方法，用于阶段4
-        使用LLM基于summary选择，失败时fallback到embedding
+        This is a method copied from V2, used in stage 4
+        Uses LLM to select based on summary, falls back to embedding if failed
         
         Returns:
-            List of selected nodes (可能是多个)
+            List of selected nodes (may be multiple)
         """
         member_ids = cluster.get('member_nodes', [])
         if not member_ids:
             return []
         
-        # 获取成员节点的 summary 信息
+        # Get summary information of member nodes
         member_summaries = []
         for node in graph.get('nodes', []):
             if node['id'] in member_ids:
@@ -300,7 +300,7 @@ class HierarchicalGraphQASystemV3:
         if not member_summaries:
             return []
         
-        # 使用LLM选择节点（可能多个）
+        # Use LLM to select nodes (possibly multiple)
         selected_node_ids, raw_response, formatted_prompt = self.llm_handler.select_nodes_from_cluster(
             question,
             cluster['id'],
@@ -308,7 +308,7 @@ class HierarchicalGraphQASystemV3:
         )
         
         if selected_node_ids:
-            logger.info(f"Agent selects {len(selected_node_ids)} 个节点: {selected_node_ids} from {cluster['id']}")
+            logger.info(f"Agent selects {len(selected_node_ids)} nodes: {selected_node_ids} from {cluster['id']}")
             selected_nodes = []
             for node_id in selected_node_ids:
                 node = self.graph_loader.get_node_by_id(node_id, item_id)
@@ -316,7 +316,7 @@ class HierarchicalGraphQASystemV3:
                     selected_nodes.append(node)
             return selected_nodes
         
-        # 如果 LLM 没有明确选择，则不选择
+        # If LLM doesn't explicitly select, don't select
         logger.warning(f"LLM does not select nodes, return none")
         # fallback_node = self.embedding_manager.find_best_member_node(
         #     question,
@@ -331,26 +331,26 @@ class HierarchicalGraphQASystemV3:
                                         item_id: str,
                                         subgoals: List[str] = None,
                                         category: int = None) -> Dict[str, Any]:
-        """V3核心方法：两阶段检索策略（V3.5增强版）
+        """V3 core method: Two-stage retrieval strategy (V3.5 enhanced version)
         
-        阶段1：直接检索所有节点的summary，获取大量候选节点（如top-50）
-        阶段2：使用LLM从top-k候选节点中筛选真正相关的节点
-        阶段3：继续往后遍历，按顺序去重收集聚类ID，直到得到top_k_per_cluster（默认3）个聚类
-        阶段4：从这些聚类中使用LLM选择成员节点
-        阶段5：所有节点加入队列，开始多路径探索（支持subgoal跟踪和优先级排序）
+        Stage 1: Directly retrieve node summaries, get large candidate pool (e.g., top-50)
+        Stage 2: Use LLM to filter truly relevant nodes from top-k candidates
+        Stage 3: Continue traversing, collect cluster IDs in order (deduplicated), until getting top_k_per_cluster (default 3) clusters
+        Stage 4: Use LLM to select member nodes from these clusters
+        Stage 5: All nodes join queue, start multi-path exploration (supports subgoal tracking and priority sorting)
         """
         
-        # 初始化全局subgoal状态（如果使用subgoal）
+        # Initialize global subgoal status (if using subgoals)
         global_subgoal_status = {}
         if subgoals:
             global_subgoal_status = {i: False for i in range(len(subgoals))}
         
-        # ========== 阶段1：直接检索节点summary（检索更多候选）==========
-        # 为了找到足够的聚类，需要检索更多的节点（比如50个）
-        retrieval_pool_size = max(50, self.top_k_nodes * 10)  # 检索池大小
+        # ========== Stage 1: Directly retrieve node summaries (retrieve more candidates) ==========
+        # To find enough clusters, need to retrieve more nodes (e.g., 50)
+        retrieval_pool_size = max(50, self.top_k_nodes * 10)  # Retrieval pool size
         logger.info(f"=== Stage 1: Retrieve nodes by summary ===")
         
-        # 直接检索更多节点作为候选池
+        # Directly retrieve more nodes as candidate pool
         all_retrieved_nodes = self.embedding_manager.find_top_k_nodes_by_summary(
             question,
             graph,
@@ -369,13 +369,13 @@ class HierarchicalGraphQASystemV3:
         
         logger.info(f"Stage 1 completed: Retrieved {len(all_retrieved_nodes)} candidate nodes")
         
-        # ========== 阶段2：使用LLM从top-k候选节点中筛选（V3.5新增）==========
+        # ========== Stage 2: Use LLM to filter from top-k candidate nodes (V3.5 new) ==========
         logger.info(f"=== Stage 2: LLM selects from top {self.top_k_nodes} candidate nodes ===")
         
-        # 准备候选节点（取前top_k_nodes个）
+        # Prepare candidate nodes (take first top_k_nodes)
         direct_top_candidates = all_retrieved_nodes[:self.top_k_nodes]
         
-        # 构建候选节点信息（给LLM看）
+        # Build candidate node information (for LLM to see)
         candidate_nodes_for_llm = []
         for node in direct_top_candidates:
             candidate_nodes_for_llm.append({
@@ -384,19 +384,19 @@ class HierarchicalGraphQASystemV3:
                 'similarity': node['similarity']
             })
         
-        # V3.5新增：让LLM选择哪些节点真正相关
+        # V3.5 new: Let LLM select which nodes are truly relevant
         start_nodes = []
         if subgoals:
-            # 如果有subgoals，使用subgoal版本的筛选
+            # If subgoals exist, use subgoal version for filtering
             selected_node_ids, llm_selection_response, _ = self.llm_handler.select_top_k_nodes(
                 question, subgoals, candidate_nodes_for_llm
             )
         else:
-            # 向后兼容：如果没有subgoals，选择所有候选节点
+            # Backward compatibility: if no subgoals, select all candidate nodes
             selected_node_ids = [n['node_id'] for n in direct_top_candidates]
             llm_selection_response = "No subgoal planning, using all candidates"
         
-        # 根据LLM的选择构建起始节点列表
+        # Build start node list based on LLM selection
         for node in direct_top_candidates:
             if node['node_id'] in selected_node_ids:
                 start_nodes.append({
@@ -407,11 +407,11 @@ class HierarchicalGraphQASystemV3:
                     'time_explicit': node.get('time_explicit', []),
                     'utterance_refs': node.get('utterance_refs', []),
                     'embedding': node.get('embedding', None),
-                    'source': 'direct_retrieval_llm_selected',  # 标记来源
+                    'source': 'direct_retrieval_llm_selected',  # Mark source
                     'similarity': node['similarity']
                 })
         
-        # 统计直接检索+LLM筛选的结果
+        # Statistics for direct retrieval + LLM filtering results
         llm_selected = len(start_nodes) > 0
         if start_nodes:
             logger.info(f"Stage 2 completed: LLM selected {len(start_nodes)}/{len(direct_top_candidates)} nodes")
@@ -1301,7 +1301,7 @@ class HierarchicalGraphQASystemV3:
         if output_dir is None:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             mode_suffix = "_debug" if self.debug_mode else ""
-            output_dir = f"/share/project/zyt/hyy/Memory/QA_system/output/qa_results_hierarchical_v3_two_stage{mode_suffix}_{timestamp}"
+            output_dir = f"./output/qa_results_hierarchical_v3_two_stage{mode_suffix}_{timestamp}"
         
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
@@ -1518,65 +1518,65 @@ class HierarchicalGraphQASystemV3:
 def main():
     parser = argparse.ArgumentParser(description='层次化图问答系统 V3 - 两阶段检索策略')
     
-    # 基础参数
+    # Base parameters
     parser.add_argument('--graphs_dir',
-                       default='/share/project/zyt/hyy/Memory/build_graph/graphs_llm_clustered',
-                       help='图数据目录')
+                       default='./graphs_llm_clustered',
+                       help='Graph data directory')
     parser.add_argument('--qa_data_path',
-                       default='/share/project/zyt/hyy/Memory/data/locomo/locomo10.json',
-                       help='QA数据文件路径')
+                       default='./data/locomo10.json',
+                       help='QA data file path')
     
-    # 模型参数
+    # Model parameters
     parser.add_argument('--model_name',
-                       default='/share/project/zyt/hyy/Model/Qwen3-8B',
-                       help='LLM模型名称或路径')
+                       default='./models/Qwen3-8B',
+                       help='LLM model name or path')
     parser.add_argument('--embedding_model',
-                       default='/share/project/zyt/hyy/Model/bge-m3',
-                       help='Embedding模型名称或路径')
+                       default='./models/bge-m3',
+                       help='Embedding model name or path')
     
-    # V3新参数
+    # V3 new parameters
     parser.add_argument('--top_k_nodes', type=int, default=5,
-                       help='首次直接检索的节点数量（默认5）')
+                       help='Number of nodes for first direct retrieval (default: 5)')
     parser.add_argument('--top_k_per_cluster', type=int, default=3,
-                       help='从每个聚类中选择的节点数量（默认3）')
+                       help='Number of nodes to select per cluster (default: 3)')
     parser.add_argument('--n_paths', type=int, default=3,
-                       help='固定的探索路径数量（默认3）')
+                       help='Fixed number of exploration paths (default: 3)')
     
-    # 探索参数
+    # Exploration parameters
     parser.add_argument('--similarity_threshold', type=float, default=0.7,
-                       help='相似度阈值')
+                       help='Similarity threshold')
     parser.add_argument('--max_rounds', type=int, default=2,
-                       help='最大探索轮数')
+                       help='Maximum exploration rounds')
     
-    # GPU参数（仅Embedding）
+    # GPU parameters (for Embedding only)
     parser.add_argument('--embedding_gpu_id', type=int, default=7,
-                       help='Embedding模型使用的GPU ID')
+                       help='GPU ID for embedding model')
     
-    # API参数（用于LLM）
+    # API parameters (for LLM)
     parser.add_argument('--api_base', default='http://localhost:8000/v1',
-                       help='LLM API的基础URL')
+                       help='LLM API base URL')
     parser.add_argument('--api_key', default='EMPTY',
-                       help='API密钥（本地部署时可以使用"EMPTY"）')
+                       help='API key (use "EMPTY" for local deployment)')
     
-    # 功能开关
+    # Feature toggles
     parser.add_argument('--disable_refinement', action='store_true',
-                       help='禁用query refinement')
+                       help='Disable query refinement')
     parser.add_argument('--no_relation', action='store_true',
-                       help='不使用关系信息')
+                       help='Do not use relation information')
     parser.add_argument('--enable_early_stopping', action='store_true',
-                       help='启用早停机制（默认关闭）')
+                       help='Enable early stopping mechanism (default: disabled)')
     parser.add_argument('--disable_subgoal_planning', action='store_true',
-                       help='禁用subgoal规划机制（默认启用）')
+                       help='Disable subgoal planning mechanism (default: enabled)')
     parser.add_argument('--enable_concurrent', action='store_true',
-                       help='启用并发探索（默认关闭，启用后使用多线程并发探索）')
+                       help='Enable concurrent exploration (default: disabled, uses multi-threading when enabled)')
     
-    # Debug参数
+    # Debug parameters
     parser.add_argument('--debug_mode', action='store_true',
-                       help='调试模式')
+                       help='Debug mode')
     parser.add_argument('--debug_items', type=int, default=1,
-                       help='调试模式下处理的item数量')
+                       help='Number of items to process in debug mode')
     parser.add_argument('--debug_qa_per_item', type=int, default=2,
-                       help='调试模式下每个item处理的QA数量')
+                       help='Number of QA pairs per item in debug mode')
     
     args = parser.parse_args()
     

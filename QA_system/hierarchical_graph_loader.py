@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-层次化图数据加载和管理模块
-支持加载包含聚类节点的图数据
+Hierarchical graph data loading and management module
+Supports loading graph data containing cluster nodes
 """
 
 import json
@@ -14,34 +14,34 @@ logger = logging.getLogger(__name__)
 
 
 class HierarchicalGraphLoader:
-    """层次化图数据加载器"""
+    """Hierarchical graph data loader"""
     
     def __init__(self, graphs_dir: str):
         self.graphs_dir = Path(graphs_dir)
         self.graphs = {}
         
     def load_graph(self, item_id: str) -> Dict[str, Any]:
-        """按需加载图数据（包含聚类信息）"""
+        """Load graph data on demand (containing cluster information)"""
         if item_id not in self.graphs:
             graph_path = self.graphs_dir / f"{item_id}.json"
             if graph_path.exists():
-                logger.info(f"加载层次化图: {graph_path}")
+                logger.info(f"Loading hierarchical graph: {graph_path}")
                 with open(graph_path, 'r', encoding='utf-8') as f:
                     graph_data = json.load(f)
                     
-                # 验证是否包含聚类信息
+                # Verify if cluster information is included
                 if 'cluster_nodes' not in graph_data:
-                    logger.warning(f"图 {item_id} 不包含聚类节点！")
+                    logger.warning(f"Graph {item_id} does not contain cluster nodes!")
                     graph_data['cluster_nodes'] = []
                     graph_data['cluster_edges'] = []
                 else:
                     n_clusters = len(graph_data['cluster_nodes'])
                     n_cluster_edges = len(graph_data.get('cluster_edges', []))
-                    logger.info(f"  包含 {n_clusters} 个聚类节点, {n_cluster_edges} 条聚类边")
+                    logger.info(f"  Contains {n_clusters} cluster nodes, {n_cluster_edges} cluster edges")
                     
                 self.graphs[item_id] = graph_data
             else:
-                logger.warning(f"图文件不存在: {graph_path}")
+                logger.warning(f"Graph file does not exist: {graph_path}")
                 self.graphs[item_id] = {
                     'nodes': [], 
                     'edges': [],
@@ -51,13 +51,13 @@ class HierarchicalGraphLoader:
         return self.graphs[item_id]
     
     def get_node_by_id(self, node_id: str, item_id: str) -> Optional[Dict[str, Any]]:
-        """根据节点ID获取节点信息（支持普通节点和聚类节点）"""
+        """Get node information by node ID (supports both regular and cluster nodes)"""
         if item_id not in self.graphs:
             return None
             
         graph = self.graphs[item_id]
         
-        # 首先在普通节点中查找
+        # First search in regular nodes
         for node in graph.get('nodes', []):
             if node['id'] == node_id:
                 return {
@@ -71,7 +71,7 @@ class HierarchicalGraphLoader:
                     'embedding': node.get('embedding', None)
                 }
         
-        # 在聚类节点中查找
+        # Search in cluster nodes
         for cluster_node in graph.get('cluster_nodes', []):
             if cluster_node['id'] == node_id:
                 return {
@@ -87,9 +87,9 @@ class HierarchicalGraphLoader:
         return None
     
     def get_neighbor_nodes(self, node_id: str, item_id: str) -> List[Dict[str, Any]]:
-        """获取指定节点的1跳邻居节点
+        """Get 1-hop neighbor nodes of specified node
         
-        注意：这里只返回普通节点的邻居，不包括聚类关系
+        Note: Only returns neighbors of regular nodes, does not include cluster relationships
         """
         if item_id not in self.graphs:
             return []
@@ -97,14 +97,14 @@ class HierarchicalGraphLoader:
         graph = self.graphs[item_id]
         neighbor_ids = set()
         
-        # 只查找原始边（不包括聚类边）
+        # Only search original edges (not cluster edges)
         for edge in graph.get('edges', []):
             if edge['source'] == node_id:
                 neighbor_ids.add(edge['target'])
             elif edge['target'] == node_id:
                 neighbor_ids.add(edge['source'])
         
-        # 获取邻居节点信息
+        # Get neighbor node information
         neighbors = []
         for neighbor_id in neighbor_ids:
             neighbor_node = self.get_node_by_id(neighbor_id, item_id)
@@ -116,14 +116,14 @@ class HierarchicalGraphLoader:
         return neighbors
     
     def get_node_relations(self, source_id: str, target_id: str, item_id: str) -> List[Dict[str, Any]]:
-        """获取两个节点之间的关系（只查找原始边）"""
+        """Get relationships between two nodes (only search original edges)"""
         if item_id not in self.graphs:
             return []
             
         relations = []
         graph = self.graphs[item_id]
         
-        # 只查找原始边
+        # Only search original edges
         for edge in graph.get('edges', []):
             if (edge['source'] == source_id and edge['target'] == target_id) or \
                (edge['source'] == target_id and edge['target'] == source_id):
@@ -137,21 +137,21 @@ class HierarchicalGraphLoader:
         return relations
     
     def get_cluster_members(self, cluster_id: str, item_id: str) -> List[Dict[str, Any]]:
-        """获取聚类的所有成员节点
+        """Get all member nodes of a cluster
         
         Args:
-            cluster_id: 聚类节点ID
-            item_id: 项目ID
+            cluster_id: Cluster node ID
+            item_id: Item ID
             
         Returns:
-            成员节点列表
+            List of member nodes
         """
         if item_id not in self.graphs:
             return []
         
         graph = self.graphs[item_id]
         
-        # 找到聚类节点
+        # Find cluster node
         cluster_node = None
         for c_node in graph.get('cluster_nodes', []):
             if c_node['id'] == cluster_id:
@@ -161,7 +161,7 @@ class HierarchicalGraphLoader:
         if not cluster_node:
             return []
         
-        # 获取所有成员节点的完整信息
+        # Get complete information of all member nodes
         member_ids = cluster_node.get('member_nodes', [])
         members = []
         

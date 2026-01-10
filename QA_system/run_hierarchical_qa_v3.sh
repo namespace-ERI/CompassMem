@@ -1,56 +1,56 @@
 #!/bin/bash
-# 运行层次化问答系统 V3 - 两阶段检索策略版本
+# Run Hierarchical QA System V3 - Two-Stage Retrieval Strategy Version
 
-# 设置工作目录
-cd /share/project/zyt/hyy/Memory/QA_system
+# Set working directory  
+# cd /path/to/QA_system
 
-# 配置参数
-GRAPHS_DIR="/share/project/zyt/hyy/Memory/build_graph/graphs_llm_14B_clustered"
-QA_DATA_PATH="/share/project/zyt/hyy/Memory/data/locomo/locomo10.json"
-MODEL_NAME="Qwen2.5-14B"  # vllm服务中的模型名称
-EMBEDDING_MODEL="/share/project/zyt/hyy/Model/bge-m3"
+# Configuration parameters
+GRAPHS_DIR="./graphs_llm_clustered"
+QA_DATA_PATH="./data/locomo10.json"
+MODEL_NAME="Qwen2.5-14B"  # Model name in vLLM service
+EMBEDDING_MODEL="./models/bge-m3"
 
-# API配置（用于LLM）
-API_BASE="http://localhost:8003/v1"  # vllm API地址
-API_KEY="sk-DFS67w1gKg33DrKbOnGQOSjaEGw6aLi0gcvJcSRV8TIx0Yq2"  # API密钥，本地部署可使用EMPTY
+# API configuration (for LLM)
+API_BASE="http://localhost:8003/v1"  # vLLM API address
+API_KEY="EMPTY"  # API key, use EMPTY for local deployment
 
-# V3新参数：两阶段检索配置
-TOP_K_NODES=5  # 首次直接检索的节点数量
-TOP_K_PER_CLUSTER=3  # 聚类数量
-N_PATHS=3  # 固定的探索路径数量
+# V3 new parameters: Two-stage retrieval configuration
+TOP_K_NODES=5  # Number of nodes for first direct retrieval
+TOP_K_PER_CLUSTER=3  # Number of clusters
+N_PATHS=3  # Fixed number of exploration paths
 
-# V3.5新参数：subgoal和早停
-ENABLE_EARLY_STOPPING=""  # 默认关闭早停（空字符串表示不加flag）
-DISABLE_SUBGOAL_PLANNING=""  # 默认启用subgoal planning（空字符串表示不加flag）
+# V3.5 new parameters: subgoal and early stopping
+ENABLE_EARLY_STOPPING=""  # Default: early stopping disabled (empty string means no flag)
+DISABLE_SUBGOAL_PLANNING=""  # Default: subgoal planning enabled (empty string means no flag)
 
-# V3.6新参数：并发探索
-# ENABLE_CONCURRENT=""  # 默认关闭并发（空字符串表示不加flag）
-# 如果要启用并发，取消下面这行的注释：
+# V3.6 new parameters: Concurrent exploration
+# ENABLE_CONCURRENT=""  # Default: concurrent disabled (empty string means no flag)
+# To enable concurrent, uncomment the line below:
 ENABLE_CONCURRENT="--enable_concurrent"
 
-# 其他参数
+# Other parameters
 SIMILARITY_THRESHOLD=0.8
 MAX_ROUNDS=3
 EMBEDDING_GPU_ID=2
 
-# 运行模式选择
+# Run mode selection
 MODE=${1:-"full"}  # full, debug, single, fast
 
 echo "========================================"
-echo "层次化QA系统 V3.6 - 两阶段检索策略 + Subgoal Planning + 并发探索"
-echo "改进点：先直接检索节点再从聚类补充 + LLM筛选top-k + Subgoal跟踪 + 线程安全并发"
-echo "使用OpenAI API调用方式"
+echo "Hierarchical QA System V3.6 - Two-Stage Retrieval + Subgoal Planning + Concurrent Exploration"
+echo "Improvements: Direct node retrieval first then cluster supplement + LLM top-k selection + Subgoal tracking + Thread-safe concurrency"
+echo "Using OpenAI API calling method"
 echo "========================================"
-echo "运行模式: $MODE"
-echo "图数据目录: $GRAPHS_DIR"
-echo "QA数据路径: $QA_DATA_PATH"
-echo "LLM模型: $MODEL_NAME"
-echo "LLM API地址: $API_BASE"
-echo "Embedding模型: $EMBEDDING_MODEL"
-echo "首次直接检索节点数 (top_k_nodes): $TOP_K_NODES"
-echo "每聚类选择节点数 (top_k_per_cluster): $TOP_K_PER_CLUSTER"
-echo "固定探索路径数量 (n_paths): $N_PATHS"
-echo "最大轮数: $MAX_ROUNDS"
+echo "Run mode: $MODE"
+echo "Graphs directory: $GRAPHS_DIR"
+echo "QA data path: $QA_DATA_PATH"
+echo "LLM model: $MODEL_NAME"
+echo "LLM API address: $API_BASE"
+echo "Embedding model: $EMBEDDING_MODEL"
+echo "First direct retrieval nodes (top_k_nodes): $TOP_K_NODES"
+echo "Nodes per cluster (top_k_per_cluster): $TOP_K_PER_CLUSTER"
+echo "Fixed exploration paths (n_paths): $N_PATHS"
+echo "Max rounds: $MAX_ROUNDS"
 echo "Embedding GPU: $EMBEDDING_GPU_ID"
 echo "Subgoal Planning: $([ -z \"$DISABLE_SUBGOAL_PLANNING\" ] && echo \"Enabled\" || echo \"Disabled\")"
 echo "Early Stopping: $([ -z \"$ENABLE_EARLY_STOPPING\" ] && echo \"Disabled\" || echo \"Enabled\")"
@@ -59,7 +59,7 @@ echo "========================================"
 
 case $MODE in
     "debug")
-        echo "🔧 调试模式：只处理1个item，每个item 2个QA"
+        echo "🔧 Debug mode: Process only 1 item, 2 QA per item"
         python hierarchical_main_qa_system_v3.py \
             --graphs_dir "$GRAPHS_DIR" \
             --qa_data_path "$QA_DATA_PATH" \
@@ -82,7 +82,7 @@ case $MODE in
         ;;
     
     "single")
-        echo "🔍 单项目模式：处理1个item的所有QA"
+        echo "🔍 Single item mode: Process all QA for 1 item"
         python hierarchical_main_qa_system_v3.py \
             --graphs_dir "$GRAPHS_DIR" \
             --qa_data_path "$QA_DATA_PATH" \
@@ -105,7 +105,7 @@ case $MODE in
         ;;
     
     "full")
-        echo "🚀 完整模式：处理所有item和QA"
+        echo "🚀 Full mode: Process all items and QA"
         python hierarchical_main_qa_system_v3.py \
             --graphs_dir "$GRAPHS_DIR" \
             --qa_data_path "$QA_DATA_PATH" \
@@ -125,7 +125,7 @@ case $MODE in
         ;;
     
     "no_refinement")
-        echo "🚫 无Refinement模式：处理所有item和QA，但禁用query refinement"
+        echo "🚫 No Refinement mode: Process all items and QA, but disable query refinement"
         python hierarchical_main_qa_system_v3.py \
             --graphs_dir "$GRAPHS_DIR" \
             --qa_data_path "$QA_DATA_PATH" \
@@ -146,7 +146,7 @@ case $MODE in
         ;;
     
     "no_relation")
-        echo "🔗 无Relation模式：处理所有item和QA，但不使用关系信息"
+        echo "🔗 No Relation mode: Process all items and QA, but don't use relation information"
         python hierarchical_main_qa_system_v3.py \
             --graphs_dir "$GRAPHS_DIR" \
             --qa_data_path "$QA_DATA_PATH" \
@@ -167,7 +167,7 @@ case $MODE in
         ;;
     
     "fast")
-        echo "⚡ 快速模式：更激进的参数配置"
+        echo "⚡ Fast mode: More aggressive parameter configuration"
         python hierarchical_main_qa_system_v3.py \
             --graphs_dir "$GRAPHS_DIR" \
             --qa_data_path "$QA_DATA_PATH" \
@@ -187,7 +187,7 @@ case $MODE in
         ;;
     
     "high_recall")
-        echo "📊 高召回模式：增加检索节点数量"
+        echo "📊 High recall mode: Increase retrieval node count"
         python hierarchical_main_qa_system_v3.py \
             --graphs_dir "$GRAPHS_DIR" \
             --qa_data_path "$QA_DATA_PATH" \
@@ -206,7 +206,7 @@ case $MODE in
         ;;
     
     "concurrent")
-        echo "🧵 并发模式：启用多线程并发探索（推荐3-5个paths）"
+        echo "🧵 Concurrent mode: Enable multi-threaded concurrent exploration (recommend 3-5 paths)"
         python hierarchical_main_qa_system_v3.py \
             --graphs_dir "$GRAPHS_DIR" \
             --qa_data_path "$QA_DATA_PATH" \
@@ -226,23 +226,23 @@ case $MODE in
         ;;
     
     *)
-        echo "❌ 未知模式: $MODE"
-        echo "可用模式: debug, single, full, no_refinement, no_relation, fast, high_recall, concurrent"
+        echo "❌ Unknown mode: $MODE"
+        echo "Available modes: debug, single, full, no_refinement, no_relation, fast, high_recall, concurrent"
         echo ""
-        echo "模式说明："
-        echo "  debug         - 调试模式 (1 item, 2 QA)"
-        echo "  single        - 单项目模式 (1 item, 所有 QA)"
-        echo "  full          - 完整模式 (所有数据)"
-        echo "  no_refinement - 禁用 Refinement"
-        echo "  no_relation   - 不使用关系信息"
-        echo "  fast          - 快速模式 (更少节点) ⚡"
-        echo "  high_recall   - 高召回模式 (更多节点) 📊"
-        echo "  concurrent    - 并发模式 (多线程探索) 🧵"
+        echo "Mode descriptions:"
+        echo "  debug         - Debug mode (1 item, 2 QA)"
+        echo "  single        - Single item mode (1 item, all QA)"
+        echo "  full          - Full mode (all data)"
+        echo "  no_refinement - Disable Refinement"
+        echo "  no_relation   - Don't use relation information"
+        echo "  fast          - Fast mode (fewer nodes) ⚡"
+        echo "  high_recall   - High recall mode (more nodes) 📊"
+        echo "  concurrent    - Concurrent mode (multi-threaded exploration) 🧵"
         exit 1
         ;;
 esac
 
 echo "========================================"
-echo "✅ 运行完成！"
+echo "✅ Run completed!"
 echo "========================================"
 

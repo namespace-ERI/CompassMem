@@ -2,26 +2,26 @@
 # -*- coding: utf-8 -*-
 """
 Prompt Templates for Hierarchical QA System
-统一管理系统中所有的prompt模板
+Unified management of all prompt templates in the system
 """
 
 
 class PromptTemplates:
-    """Prompt模板集合"""
+    """Prompt template collection"""
     
     @staticmethod
     def get_action_decision_prompt(question: str, kept_nodes_info: str, 
                                    current_info: str, neighbor_info: str) -> str:
-        """获取动作决策的prompt（skip/expand/answer）
+        """Get action decision prompt (skip/expand/answer)
         
         Args:
-            question: 问题
-            kept_nodes_info: 已保留节点的信息
-            current_info: 当前节点信息
-            neighbor_info: 邻居节点信息
+            question: Question
+            kept_nodes_info: Information of kept nodes
+            current_info: Current node information
+            neighbor_info: Neighbor node information
             
         Returns:
-            完整的prompt字符串
+            Complete prompt string
         """
         return f"""You are an expert information evaluator. Your task is to decide which action to take for the current node based on how relevant and sufficient it is for answering the given question.
         You have THREE possible actions:
@@ -128,14 +128,14 @@ Now, make your decision:
 
     @staticmethod
     def get_answer_generation_prompt(question: str, context: str) -> str:
-        """获取生成答案的prompt
+        """Get answer generation prompt
         
         Args:
-            question: 问题
-            context: 上下文信息（已保留节点的原文）
+            question: Question
+            context: Context information (original text of kept nodes)
             
         Returns:
-            完整的prompt字符串
+            Complete prompt string
         """
         return f"""Your task is to answer the QUESTION based on the provided CONTEXT.
 
@@ -159,14 +159,14 @@ ANSWER:"""
 
     @staticmethod
     def get_answer_generation_prompt_category3(question: str, context: str) -> str:
-        """获取生成答案的prompt (专门针对category3问题)
+        """Get answer generation prompt (specifically for category 3 questions)
         
         Args:
-            question: 问题
-            context: 上下文信息（已保留节点的原文）
+            question: Question
+            context: Context information (original text of kept nodes)
             
         Returns:
-            完整的prompt字符串
+            Complete prompt string
         """
         return f"""Your task is to answer the QUESTION based on the provided CONTEXT.
 
@@ -188,14 +188,14 @@ ANSWER:"""
 
     @staticmethod
     def get_refinement_query_prompt(original_question: str, context_so_far: str) -> str:
-        """获取生成refined query的prompt
+        """Get refined query generation prompt
         
         Args:
-            original_question: 原始问题
-            context_so_far: 目前收集到的信息
+            original_question: Original question
+            context_so_far: Information collected so far
             
         Returns:
-            完整的prompt字符串
+            Complete prompt string
         """
         return f"""You are an assistant whose role is to evaluate existing information, detect gaps with respect to the original question, and generate an appropriate next query.
 
@@ -224,17 +224,17 @@ Generate your response:"""
 
     @staticmethod
     def get_cluster_node_selection_prompt(question: str, member_summaries: list) -> str:
-        """获取从聚类中选择节点的prompt
+        """Get prompt for selecting nodes from cluster
         
         Args:
-            question: 问题
-            member_summaries: 成员节点的summary信息列表
+            question: Question
+            member_summaries: List of member node summary information
                              [{'node_id': 'N1', 'summary': '...', 'people': [...], 'time': '...'}, ...]
             
         Returns:
-            完整的prompt字符串
+            Complete prompt string
         """
-        # 构建节点列表部分
+        # Build node list section
         nodes_text = ""
         for member in member_summaries:
             node_id = member['node_id']
@@ -281,13 +281,13 @@ Reason: N5 covers when Alice went to India (May 2022), and N12 describes where s
 
     @staticmethod
     def get_planner_prompt(question: str) -> str:
-        """获取问题规划的prompt，将问题拆分为subgoals
+        """Get question planning prompt, break question into subgoals
         
         Args:
-            question: 原始问题
+            question: Original question
             
         Returns:
-            完整的prompt字符串
+            Complete prompt string
         """
         return f"""You are a strategic planning assistant. Your task is to analyze a question and break it down into 2-5 specific sub-goals that need to be satisfied to fully answer the question.
 
@@ -327,20 +327,20 @@ Now analyze the question and generate sub-goals:"""
     def get_action_decision_prompt_with_subgoals(question: str, subgoals: list, 
                                                   subgoal_status: dict, kept_nodes_info: str, 
                                                   current_info: str, neighbor_info: str) -> str:
-        """获取动作决策的prompt（支持subgoal跟踪）
+        """Get action decision prompt (with subgoal tracking support)
         
         Args:
-            question: 问题
-            subgoals: subgoal列表 ['subgoal1', 'subgoal2', ...]
-            subgoal_status: subgoal状态字典 {0: True/False, 1: True/False, ...}
-            kept_nodes_info: 已保留节点的信息
-            current_info: 当前节点信息
-            neighbor_info: 邻居节点信息
+            question: Question
+            subgoals: Subgoal list ['subgoal1', 'subgoal2', ...]
+            subgoal_status: Subgoal status dictionary {0: True/False, 1: True/False, ...}
+            kept_nodes_info: Information of kept nodes
+            current_info: Current node information
+            neighbor_info: Neighbor node information
             
         Returns:
-            完整的prompt字符串
+            Complete prompt string
         """
-        # 构建subgoal状态显示
+        # Build subgoal status display
         subgoals_text = "SUB-GOALS (Information needs to fully answer the question):\n"
         for i, subgoal in enumerate(subgoals):
             status = "✓ SATISFIED" if subgoal_status.get(i, False) else "✗ NOT YET SATISFIED"
@@ -424,22 +424,22 @@ Now, make your decision:"""
     @staticmethod
     def get_top_k_node_selection_prompt(question: str, subgoals: list, 
                                        candidate_nodes: list) -> str:
-        """获取从top-k候选节点中选择的prompt
+        """Get prompt for selecting from top-k candidate nodes
         
         Args:
-            question: 问题
-            subgoals: subgoal列表
-            candidate_nodes: 候选节点列表 [{'node_id': 'N1', 'summary': '...', 'similarity': 0.8}, ...]
+            question: Question
+            subgoals: Subgoal list
+            candidate_nodes: Candidate node list [{'node_id': 'N1', 'summary': '...', 'similarity': 0.8}, ...]
             
         Returns:
-            完整的prompt字符串
+            Complete prompt string
         """
-        # 构建subgoal文本
+        # Build subgoal text
         subgoals_text = "Sub-goals needed to answer this question:\n"
         for i, subgoal in enumerate(subgoals):
             subgoals_text += f"{i+1}. {subgoal}\n"
         
-        # 构建候选节点列表
+        # Build candidate node list
         nodes_text = ""
         for node in candidate_nodes:
             node_id = node['node_id']
@@ -480,18 +480,18 @@ Now make your selection:"""
                                                    subgoals: list, 
                                                    subgoal_status: dict,
                                                    context_so_far: str) -> str:
-        """获取生成refined query的prompt（支持subgoal状态）
+        """Get refined query generation prompt (with subgoal status support)
         
         Args:
-            original_question: 原始问题
-            subgoals: subgoal列表
-            subgoal_status: subgoal状态字典
-            context_so_far: 目前收集到的信息
+            original_question: Original question
+            subgoals: Subgoal list
+            subgoal_status: Subgoal status dictionary
+            context_so_far: Information collected so far
             
         Returns:
-            完整的prompt字符串
+            Complete prompt string
         """
-        # 构建subgoal状态显示
+        # Build subgoal status display
         satisfied_goals = []
         unsatisfied_goals = []
         for i, subgoal in enumerate(subgoals):
@@ -536,14 +536,14 @@ Generate your response:"""
 
     @staticmethod
     def get_system_message(task_type: str) -> str:
-        """获取系统消息
+        """Get system message
         
         Args:
-            task_type: 任务类型 ('action_decision', 'answer_generation', 
+            task_type: Task type ('action_decision', 'answer_generation', 
                       'refinement', 'cluster_selection', 'planner', 'top_k_selection')
             
         Returns:
-            系统消息字符串
+            System message string
         """
         system_messages = {
             'action_decision': "You are a helpful assistant that evaluates information relevance and makes exploration decisions.",

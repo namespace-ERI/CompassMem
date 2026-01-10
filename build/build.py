@@ -259,9 +259,9 @@ def compute_embeddings(texts: List[str], method: str = "e5", sbert_model_name: s
         if not sbert_model_name:
             raise RuntimeError(
                 "E5 embedding selected but no model path/name provided.\n"
-                "Please pass --sbert_model with an embedding model path (e.g., /share/project/zyt/hyy/Model/bge-m3 or other path)."
+                "Please pass --sbert_model with an embedding model path (e.g., /path/to/bge-m3 or other path)."
             )
-        # bge-m3模型不需要添加前缀
+        # bge-m3 model does not need prefix
         processed_texts = [t.strip() for t in texts]
         tok = AutoTokenizer.from_pretrained(sbert_model_name)
         mdl = AutoModel.from_pretrained(sbert_model_name)

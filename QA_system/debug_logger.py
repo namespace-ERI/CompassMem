@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-LLM交互日志管理模块
+LLM interaction log management module
 """
 
 import json
@@ -14,30 +14,30 @@ logger = logging.getLogger(__name__)
 
 
 class DebugLogger:
-    """LLM交互日志管理器 - 每个item的所有QA和交互记录在一个文件中"""
+    """LLM interaction log manager - all QA and interaction records for each item in one file"""
     
-    def __init__(self, debug_mode: bool = False, base_dir: str = "/share/project/zyt/hyy/Memory/QA_system/llm_debug"):
+    def __init__(self, debug_mode: bool = False, base_dir: str = "./llm_debug"):
         self.debug_mode = debug_mode
         self.llm_log_dir = None
-        self.interaction_counter = 0  # 用于生成唯一的交互ID
-        self.item_data = {}  # 存储每个item的所有数据 {item_id: {'qa_list': [], 'current_qa_interactions': []}}
+        self.interaction_counter = 0  # For generating unique interaction IDs
+        self.item_data = {}  # Store all data for each item {item_id: {'qa_list': [], 'current_qa_interactions': []}}
         
-        # 始终初始化日志记录（不仅限于debug模式）
+        # Always initialize logging (not limited to debug mode)
         self._init_logging(base_dir)
     
     def _init_logging(self, base_dir: str):
-        """创建LLM交互日志目录"""
+        """Create LLM interaction log directory"""
         try:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             self.llm_log_dir = Path(base_dir) / timestamp
             self.llm_log_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"📝 LLM交互日志目录: {self.llm_log_dir}")
+            logger.info(f"📝 LLM interaction log directory: {self.llm_log_dir}")
         except Exception as e:
-            logger.warning(f"初始化LLM交互日志目录失败: {e}")
+            logger.warning(f"Failed to initialize LLM interaction log directory: {e}")
     
     def log_llm_interaction(self, phase: str, formatted_prompt: str, raw_response: str, 
                            extra_info: Optional[Dict[str, Any]] = None):
-        """记录LLM交互到内存中，等待与QA结果一起写入
+        """Record LLM interaction to memory, waiting to write with QA results
         
         Args:
             phase: Interaction phase (e.g., 'check_sufficiency', 'generate_answer', 'refinement_query')
@@ -49,14 +49,14 @@ class DebugLogger:
             return
         
         try:
-            # 生成唯一的交互ID
+            # Generate unique interaction ID
             self.interaction_counter += 1
             interaction_id = f"{self.interaction_counter:04d}"
             
-            # 获取item_id
+            # Get item_id
             item_id = extra_info.get('item_id', 'unknown') if extra_info else 'unknown'
             
-            # 初始化item数据结构
+            # Initialize item data structure
             if item_id not in self.item_data:
                 self.item_data[item_id] = {
                     'item_id': item_id,
@@ -64,7 +64,7 @@ class DebugLogger:
                     'current_qa_interactions': []
                 }
             
-            # 构建交互记录
+            # Build interaction record
             interaction_record = {
                 "interaction_id": interaction_id,
                 "timestamp": datetime.now().isoformat(),
@@ -73,26 +73,26 @@ class DebugLogger:
                 "response": raw_response
             }
             
-            # 添加元数据
+            # Add metadata
             if extra_info:
                 interaction_record["metadata"] = extra_info
             
-            # 添加到当前QA的交互列表
+            # Add to current QA's interaction list
             self.item_data[item_id]['current_qa_interactions'].append(interaction_record)
             
             if self.debug_mode:
-                logger.debug(f"📝 记录LLM交互 #{interaction_id} (item: {item_id}, phase: {phase})")
+                logger.debug(f"📝 Recorded LLM interaction #{interaction_id} (item: {item_id}, phase: {phase})")
                 
         except Exception as e:
-            logger.warning(f"记录LLM交互失败: {e}")
+            logger.warning(f"Failed to record LLM interaction: {e}")
     
     def log_qa_result(self, item_id: str, question: str, result: Dict[str, Any]):
-        """记录单个QA结果和对应的LLM交互到内存中"""
+        """Record single QA result and corresponding LLM interactions to memory"""
         if self.llm_log_dir is None:
             return
         
         try:
-            # 初始化item数据结构
+            # Initialize item data structure
             if item_id not in self.item_data:
                 self.item_data[item_id] = {
                     'item_id': item_id,
@@ -100,7 +100,7 @@ class DebugLogger:
                     'current_qa_interactions': []
                 }
             
-            # 构建QA记录（包含答案和交互）
+            # Build QA record (including answer and interactions)
             qa_record = {
                 'question': question,
                 'answer': result.get('answer', ''),
@@ -116,36 +116,36 @@ class DebugLogger:
                 'llm_interactions': self.item_data[item_id]['current_qa_interactions'].copy()
             }
             
-            # 添加到QA列表
+            # Add to QA list
             self.item_data[item_id]['qa_list'].append(qa_record)
             
-            # 清空当前QA的交互列表，准备下一个QA
+            # Clear current QA's interaction list, prepare for next QA
             self.item_data[item_id]['current_qa_interactions'] = []
             
             if self.debug_mode:
-                logger.debug(f"📝 记录QA结果 (item: {item_id}, question: {question[:50]}...)")
+                logger.debug(f"📝 Recorded QA result (item: {item_id}, question: {question[:50]}...)")
                 
         except Exception as e:
-            logger.warning(f"记录QA结果失败: {e}")
+            logger.warning(f"Failed to record QA result: {e}")
     
     def finalize_item(self, item_id: str):
-        """完成一个item的处理，将所有数据写入文件"""
+        """Complete processing of an item, write all data to file"""
         if self.llm_log_dir is None or item_id not in self.item_data:
             return
         
         try:
-            # 生成文件名
+            # Generate filename
             filename = f"{item_id}_debug.json"
             filepath = self.llm_log_dir / filename
             
-            # 写入文件
+            # Write to file
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(self.item_data[item_id], f, ensure_ascii=False, indent=2)
             
-            logger.info(f"📝 写入item调试文件: {filepath}")
+            logger.info(f"📝 Wrote item debug file: {filepath}")
             
-            # 清理已写入的数据
+            # Clean up written data
             del self.item_data[item_id]
             
         except Exception as e:
-            logger.warning(f"写入item调试文件失败: {e}")
+            logger.warning(f"Failed to write item debug file: {e}")

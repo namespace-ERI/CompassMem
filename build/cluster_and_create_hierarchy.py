@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-对图进行K-means聚类，并创建高层节点
+Perform K-means clustering on the graph and create hierarchical nodes
 """
 import json
 import numpy as np
@@ -14,14 +14,14 @@ import argparse
 
 
 def load_graph(json_path: str) -> Dict[str, Any]:
-    """加载图数据"""
+    """Load graph data"""
     with open(json_path, 'r', encoding='utf-8') as f:
         graph_data = json.load(f)
     return graph_data
 
 
 def extract_embeddings_and_ids(nodes: List[Dict]) -> tuple:
-    """提取节点的embedding和ID"""
+    """Extract embeddings and IDs from nodes"""
     embeddings = []
     node_ids = []
     
@@ -34,14 +34,14 @@ def extract_embeddings_and_ids(nodes: List[Dict]) -> tuple:
 
 
 def perform_kmeans(embeddings: np.ndarray, n_clusters: int = None) -> np.ndarray:
-    """执行K-means聚类"""
-    # 如果没有指定聚类数，使用启发式方法
+    """Perform K-means clustering"""
+    # If number of clusters not specified, use heuristic method
     if n_clusters is None:
         n_samples = len(embeddings)
-        # 启发式：每个簇平均10-20个节点
+        # Heuristic: average 5-10 nodes per cluster
         n_clusters = max(2, min(n_samples // 5, 50))
     
-    print(f"  执行K-means聚类，聚类数: {n_clusters}")
+    print(f"  Performing K-means clustering, number of clusters: {n_clusters}")
     kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
     labels = kmeans.fit_predict(embeddings)
     
@@ -50,24 +50,24 @@ def perform_kmeans(embeddings: np.ndarray, n_clusters: int = None) -> np.ndarray
 
 def create_cluster_nodes(graph_data: Dict, labels: np.ndarray, 
                         node_ids: List[str], cluster_centers: np.ndarray) -> Dict[str, Any]:
-    """创建包含高层聚类节点的新图"""
+    """Create new graph with hierarchical cluster nodes"""
     
-    # 深拷贝原始图数据
+    # Deep copy original graph data
     new_graph = {
         'meta': graph_data['meta'].copy(),
         'nodes': graph_data['nodes'].copy(),
         'edges': graph_data['edges'].copy() if 'edges' in graph_data else []
     }
     
-    # 更新元数据
+    # Update metadata
     new_graph['meta']['clustered'] = True
     new_graph['meta']['cluster_created_at'] = datetime.now().isoformat() + 'Z'
     new_graph['meta']['n_clusters'] = int(max(labels) + 1)
     
-    # 创建node_id到索引的映射
+    # Create node_id to index mapping
     node_id_to_idx = {node_id: idx for idx, node_id in enumerate(node_ids)}
     
-    # 按簇组织节点
+    # Organize nodes by cluster
     clusters = {}
     for idx, label in enumerate(labels):
         cluster_id = int(label)
@@ -75,7 +75,7 @@ def create_cluster_nodes(graph_data: Dict, labels: np.ndarray,
             clusters[cluster_id] = []
         clusters[cluster_id].append(node_ids[idx])
     
-    # 获取当前最大的节点ID数字
+    # Get maximum node ID number
     max_node_num = 0
     for node in new_graph['nodes']:
         node_id = node['id']
@@ -86,7 +86,7 @@ def create_cluster_nodes(graph_data: Dict, labels: np.ndarray,
             except:
                 pass
     
-    # 创建高层节点
+    # Create high-level cluster nodes
     cluster_nodes = []
     cluster_node_mapping = {}  # cluster_id -> cluster_node_id
     
@@ -94,7 +94,7 @@ def create_cluster_nodes(graph_data: Dict, labels: np.ndarray,
         cluster_node_id = f"C{cluster_id}"
         cluster_node_mapping[cluster_id] = cluster_node_id
         
-        # 计算簇内embedding的平均值（使用原始节点的embedding）
+        # Calculate average embedding within cluster (using original node embeddings)
         cluster_embeddings = []
         for member_id in member_node_ids:
             for node in new_graph['nodes']:
@@ -104,7 +104,7 @@ def create_cluster_nodes(graph_data: Dict, labels: np.ndarray,
         
         avg_embedding = np.mean(cluster_embeddings, axis=0).tolist()
         
-        # 收集簇内所有session_ids, event_ids等信息
+        # Collect all session_ids, event_ids and other info within cluster
         all_session_ids = set()
         all_event_ids = set()
         all_people = set()
@@ -117,7 +117,7 @@ def create_cluster_nodes(graph_data: Dict, labels: np.ndarray,
                     all_people.update(node.get('people', []))
                     break
         
-        # 创建聚类节点
+        # Create cluster node
         cluster_node = {
             'id': cluster_node_id,
             'type': 'cluster',
@@ -133,10 +133,10 @@ def create_cluster_nodes(graph_data: Dict, labels: np.ndarray,
         
         cluster_nodes.append(cluster_node)
     
-    # 将高层节点添加到图中
+    # Add cluster nodes to graph
     new_graph['cluster_nodes'] = cluster_nodes
     
-    # 创建高层节点与成员节点之间的边
+    # Create edges between cluster nodes and member nodes
     cluster_edges = []
     for cluster_node in cluster_nodes:
         cluster_node_id = cluster_node['id']
@@ -151,31 +151,31 @@ def create_cluster_nodes(graph_data: Dict, labels: np.ndarray,
     
     new_graph['cluster_edges'] = cluster_edges
     
-    print(f"  创建了 {len(cluster_nodes)} 个高层聚类节点")
-    print(f"  创建了 {len(cluster_edges)} 条聚类边")
+    print(f"  Created {len(cluster_nodes)} cluster nodes")
+    print(f"  Created {len(cluster_edges)} cluster edges")
     
     return new_graph
 
 
 def create_networkx_graph(graph_data: Dict) -> nx.Graph:
-    """创建NetworkX图（包含聚类节点和边）"""
+    """Create NetworkX graph including cluster nodes and edges"""
     G = nx.Graph()
     
-    # 添加原始节点
+    # Add original nodes
     for node in graph_data['nodes']:
         G.add_node(node['id'], **node)
     
-    # 添加聚类节点
+    # Add cluster nodes
     if 'cluster_nodes' in graph_data:
         for node in graph_data['cluster_nodes']:
             G.add_node(node['id'], **node)
     
-    # 添加原始边
+    # Add original edges
     if 'edges' in graph_data:
         for edge in graph_data['edges']:
             G.add_edge(edge['source'], edge['target'], **edge)
     
-    # 添加聚类边
+    # Add cluster edges
     if 'cluster_edges' in graph_data:
         for edge in graph_data['cluster_edges']:
             G.add_edge(edge['source'], edge['target'], **edge)
@@ -184,85 +184,84 @@ def create_networkx_graph(graph_data: Dict) -> nx.Graph:
 
 
 def process_single_graph(input_path: str, output_dir: Path, n_clusters: int = None):
-    """处理单个图文件"""
-    print(f"\n处理图: {input_path}")
+    """Process a single graph file"""
+    print(f"\nProcessing graph: {input_path}")
     
-    # 加载图
+    # Load graph
     graph_data = load_graph(input_path)
     
-    # 提取embeddings
+    # Extract embeddings
     embeddings, node_ids = extract_embeddings_and_ids(graph_data['nodes'])
-    print(f"  提取了 {len(embeddings)} 个节点的embedding")
+    print(f"  Extracted embeddings from {len(embeddings)} nodes")
     
     if len(embeddings) < 2:
-        print(f"  节点数太少，跳过聚类")
+        print(f"  Too few nodes, skipping clustering")
         return
     
-    # 执行K-means聚类
+    # Perform K-means clustering
     labels, cluster_centers = perform_kmeans(embeddings, n_clusters)
     
-    # 创建新图
+    # Create new graph
     new_graph_data = create_cluster_nodes(graph_data, labels, node_ids, cluster_centers)
     
-    # 保存JSON文件
+    # Save JSON file
     input_filename = Path(input_path).name
     output_json_path = output_dir / input_filename
     with open(output_json_path, 'w', encoding='utf-8') as f:
         json.dump(new_graph_data, f, ensure_ascii=False, indent=2)
-    print(f"  保存JSON到: {output_json_path}")
+    print(f"  Saved JSON to: {output_json_path}")
     
-    # 创建并保存NetworkX图
+    # Create and save NetworkX graph
     G = create_networkx_graph(new_graph_data)
     output_gpickle_path = output_dir / input_filename.replace('.json', '.gpickle')
     with open(output_gpickle_path, 'wb') as f:
         pickle.dump(G, f)
-    print(f"  保存gpickle到: {output_gpickle_path}")
+    print(f"  Saved gpickle to: {output_gpickle_path}")
     
-    # 打印聚类统计信息
-    print(f"  聚类统计:")
+    # Print clustering statistics
+    print(f"  Clustering statistics:")
     for cluster_node in new_graph_data['cluster_nodes']:
-        print(f"    Cluster {cluster_node['cluster_id']}: {cluster_node['n_members']} 个节点")
+        print(f"    Cluster {cluster_node['cluster_id']}: {cluster_node['n_members']} nodes")
 
 
 def main():
-    parser = argparse.ArgumentParser(description='对图进行K-means聚类并创建高层节点')
+    parser = argparse.ArgumentParser(description='Perform K-means clustering on graphs and create cluster nodes')
     parser.add_argument('--input_dir', type=str, 
-                       default='/share/project/zyt/hyy/Memory/build_graph/graphs_llm_bge',
-                       help='输入图文件所在目录')
+                       default='./graphs',
+                       help='Input directory containing graph files')
     parser.add_argument('--output_dir', type=str,
-                       default='/share/project/zyt/hyy/Memory/build_graph/graphs_llm_clustered_bge',
-                       help='输出图文件所在目录')
+                       default='./output',
+                       help='Output directory for processed graphs')
     parser.add_argument('--n_clusters', type=int, default=None,
-                       help='聚类数量（如果不指定，自动计算）')
+                       help='Number of clusters (if not specified, auto-calculated)')
     parser.add_argument('--pattern', type=str, default='*.json',
-                       help='要处理的文件模式')
+                       help='File pattern to process')
     
     args = parser.parse_args()
     
     input_dir = Path(args.input_dir)
     output_dir = Path(args.output_dir)
     
-    # 创建输出目录
+    # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"输出目录: {output_dir}")
+    print(f"Output directory: {output_dir}")
     
-    # 查找所有图文件
+    # Find all graph files
     graph_files = sorted(list(input_dir.glob(args.pattern)))
-    print(f"\n找到 {len(graph_files)} 个图文件")
+    print(f"\nFound {len(graph_files)} graph files")
     
-    # 处理每个图
+    # Process each graph
     for graph_file in graph_files:
         try:
             process_single_graph(str(graph_file), output_dir, args.n_clusters)
         except Exception as e:
-            print(f"处理 {graph_file} 时出错: {e}")
+            print(f"Error processing {graph_file}: {e}")
             import traceback
             traceback.print_exc()
             continue
     
-    print(f"\n完成！所有处理后的图已保存到: {output_dir}")
+    print(f"\nComplete! All processed graphs saved to: {output_dir}")
 
 
 if __name__ == '__main__':
     main()
-

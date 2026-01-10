@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-评估单轮QA结果的指标计算脚本（对齐代码二版本）
-计算F1、Precision、Recall、BLEU-1等指标
-与AgenticMemory评测代码保持一致
+Evaluation script for single-round QA results (aligned with code version 2)
+Calculate F1, Precision, Recall, BLEU-1 and other metrics
+Consistent with AgenticMemory evaluation code
 """
 
 import json
@@ -12,7 +12,7 @@ from typing import Dict, List, Any, Tuple
 from collections import defaultdict
 import argparse
 import nltk
-nltk.data.path.append("/share/project/zyt/envs/nltk/nltk_data")
+# nltk.data.path.append("/path/to/nltk_data")
 from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 
 # Download required NLTK data
@@ -25,24 +25,24 @@ from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 
 def simple_tokenize(text):
     """
-    Simple tokenization function (与代码二保持一致)
+    Simple tokenization function (consistent with code version 2)
     """
     text = str(text)
     return text.lower().replace(".", " ").replace(",", " ").replace("!", " ").replace("?", " ").split()
 
 
 def normalize_text(text) -> str:
-    """标准化文本，用于比较"""
+    """Normalize text for comparison"""
     if text is None:
         return ""
     
-    # 转换为字符串
+    # Convert to string
     text = str(text)
     
-    # 转换为小写
+    # Convert to lowercase
     text = text.lower().strip()
     
-    # 移除标点符号和多余空格
+    # Remove punctuation and extra spaces
     text = re.sub(r'[^\w\s]', ' ', text)
     text = re.sub(r'\s+', ' ', text)
     
@@ -51,23 +51,23 @@ def normalize_text(text) -> str:
 
 def calculate_f1(predicted: str, ground_truth: str) -> float:
     """
-    计算F1分数（与代码二保持一致：基于集合的token-level F1）
+    Calculate F1 score (consistent with code version 2: set-based token-level F1)
     """
-    # 使用simple_tokenize与代码二保持一致
+    # Use simple_tokenize consistent with code version 2
     pred_tokens = set(simple_tokenize(predicted))
     gt_tokens = set(simple_tokenize(ground_truth))
     
     if not pred_tokens or not gt_tokens:
         return 0.0
     
-    # 计算交集
+    # Calculate intersection
     common_tokens = pred_tokens & gt_tokens
     
-    # 计算precision和recall
+    # Calculate precision and recall
     precision = len(common_tokens) / len(pred_tokens)
     recall = len(common_tokens) / len(gt_tokens)
     
-    # 计算F1
+    # Calculate F1
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
     
     return f1
@@ -75,7 +75,7 @@ def calculate_f1(predicted: str, ground_truth: str) -> float:
 
 def calculate_precision(predicted: str, ground_truth: str) -> float:
     """
-    计算精确率（基于集合）
+    Calculate precision (set-based)
     """
     pred_tokens = set(simple_tokenize(predicted))
     gt_tokens = set(simple_tokenize(ground_truth))
@@ -90,7 +90,7 @@ def calculate_precision(predicted: str, ground_truth: str) -> float:
 
 def calculate_recall(predicted: str, ground_truth: str) -> float:
     """
-    计算召回率（基于集合）
+    Calculate recall (set-based)
     """
     pred_tokens = set(simple_tokenize(predicted))
     gt_tokens = set(simple_tokenize(ground_truth))
@@ -105,28 +105,28 @@ def calculate_recall(predicted: str, ground_truth: str) -> float:
 
 def calculate_bleu1(predicted: str, reference: str) -> float:
     """
-    计算BLEU-1分数（与代码二保持一致：使用nltk标准实现）
-    使用sentence_bleu，包含brevity penalty和smoothing
+    Calculate BLEU-1 score (consistent with code version 2: uses nltk standard implementation)
+    Uses sentence_bleu, includes brevity penalty and smoothing
     """
-    # 转换为字符串，避免整数类型导致的错误
+    # Convert to string, avoid integer type errors
     predicted = str(predicted) if predicted is not None else ""
     reference = str(reference) if reference is not None else ""
     
     if not predicted or not reference:
         return 0.0
     
-    # 使用nltk tokenizer与代码二保持一致
+    # Use nltk tokenizer consistent with code version 2
     try:
         pred_tokens = nltk.word_tokenize(predicted.lower())
         ref_tokens = [nltk.word_tokenize(reference.lower())]
         
-        # BLEU-1权重：只考虑1-gram
+        # BLEU-1 weights: only consider 1-gram
         weights = (1, 0, 0, 0)
         
-        # 使用smoothing function与代码二保持一致
+        # Use smoothing function consistent with code version 2
         smooth = SmoothingFunction().method1
         
-        # 计算BLEU-1（包含brevity penalty）
+        # Calculate BLEU-1 (including brevity penalty)
         bleu1 = sentence_bleu(ref_tokens, pred_tokens, weights=weights, smoothing_function=smooth)
         
         return bleu1
@@ -137,9 +137,9 @@ def calculate_bleu1(predicted: str, reference: str) -> float:
 
 def calculate_bleu_scores(predicted: str, reference: str) -> Dict[str, float]:
     """
-    计算BLEU-1到BLEU-4分数（与代码二完全一致）
+    Calculate BLEU-1 to BLEU-4 scores (completely consistent with code version 2)
     """
-    # 转换为字符串，避免整数类型导致的错误
+    # Convert to string, avoid integer type errors
     predicted = str(predicted) if predicted is not None else ""
     reference = str(reference) if reference is not None else ""
     
@@ -169,18 +169,18 @@ def calculate_bleu_scores(predicted: str, reference: str) -> Dict[str, float]:
 
 
 def load_qa_results(results_dir: str) -> List[Dict[str, Any]]:
-    """加载所有QA结果文件"""
+    """Load all QA result files"""
     all_results = []
     
-    # 获取所有结果文件
+    # Get all result files
     result_files = [f for f in os.listdir(results_dir) if f.endswith('_qa_results.json')]
-    result_files.sort()  # 按文件名排序
+    result_files.sort()  # Sort by filename
     
-    print(f"找到 {len(result_files)} 个结果文件")
+    print(f"Found {len(result_files)} result files")
     
     for filename in result_files:
         filepath = os.path.join(results_dir, filename)
-        print(f"加载文件: {filename}")
+        print(f"Loading file: {filename}")
         
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
@@ -189,22 +189,22 @@ def load_qa_results(results_dir: str) -> List[Dict[str, Any]]:
             item_id = data.get('item_id', filename.replace('_qa_results.json', ''))
             qa_results = data.get('qa_results', [])
             
-            print(f"  - {item_id}: {len(qa_results)} 个问题")
+            print(f"  - {item_id}: {len(qa_results)} questions")
             
             for qa in qa_results:
                 qa['source_item'] = item_id
                 all_results.append(qa)
                 
         except Exception as e:
-            print(f"错误加载文件 {filename}: {e}")
+            print(f"Error loading file {filename}: {e}")
             continue
     
-    print(f"总共加载了 {len(all_results)} 个QA结果")
+    print(f"Total loaded {len(all_results)} QA results")
     return all_results
 
 
 def calculate_metrics_for_results(results: List[Dict[str, Any]]) -> Dict[str, float]:
-    """计算所有结果的指标"""
+    """Calculate metrics for all results"""
     if not results:
         return {
             'f1': 0.0,
@@ -229,12 +229,12 @@ def calculate_metrics_for_results(results: List[Dict[str, Any]]) -> Dict[str, fl
         predicted = result.get('answer', '')
         ground_truth = result.get('ground_truth', '')
         
-        # 计算各项指标
+        # Calculate all metrics
         f1 = calculate_f1(predicted, ground_truth)
         precision = calculate_precision(predicted, ground_truth)
         recall = calculate_recall(predicted, ground_truth)
         
-        # 计算BLEU分数
+        # Calculate BLEU scores
         bleu_scores = calculate_bleu_scores(predicted, ground_truth)
         
         total_f1 += f1
@@ -260,10 +260,10 @@ def calculate_metrics_for_results(results: List[Dict[str, Any]]) -> Dict[str, fl
 
 
 def calculate_category_metrics(results: List[Dict[str, Any]]) -> Dict[int, Dict[str, float]]:
-    """按category计算指标"""
+    """Calculate metrics by category"""
     category_results = defaultdict(list)
     
-    # 按category分组
+    # Group by category
     for result in results:
         category = result.get('category')
         if category is not None:
@@ -277,19 +277,19 @@ def calculate_category_metrics(results: List[Dict[str, Any]]) -> Dict[int, Dict[
 
 
 def calculate_metrics_without_category(results: List[Dict[str, Any]], exclude_category: int) -> Dict[str, float]:
-    """计算排除指定category的指标"""
+    """Calculate metrics excluding specified category"""
     filtered_results = [result for result in results if result.get('category') != exclude_category]
     return calculate_metrics_for_results(filtered_results)
 
 
 def print_metrics(metrics: Dict[str, float], title: str = ""):
-    """打印指标结果"""
+    """Print metric results"""
     if title:
         print(f"\n{'='*50}")
         print(f"{title}")
         print(f"{'='*50}")
     
-    print(f"总问题数: {metrics['total_questions']}")
+    print(f"Total questions: {metrics['total_questions']}")
     print(f"F1 Score: {metrics['f1']:.4f}")
     print(f"Precision: {metrics['precision']:.4f}")
     print(f"Recall: {metrics['recall']:.4f}")
@@ -300,15 +300,15 @@ def print_metrics(metrics: Dict[str, float], title: str = ""):
 
 
 def print_category_metrics(category_metrics: Dict[int, Dict[str, float]]):
-    """打印按category分组的指标"""
+    """Print metrics grouped by category"""
     print(f"\n{'='*60}")
-    print("按Category分组的指标")
+    print("Metrics grouped by Category")
     print(f"{'='*60}")
     
     for category in sorted(category_metrics.keys()):
         metrics = category_metrics[category]
         print(f"\nCategory {category}:")
-        print(f"  问题数: {metrics['total_questions']}")
+        print(f"  Questions: {metrics['total_questions']}")
         print(f"  F1: {metrics['f1']:.4f}")
         print(f"  Precision: {metrics['precision']:.4f}")
         print(f"  Recall: {metrics['recall']:.4f}")
@@ -322,9 +322,9 @@ def save_detailed_results(results: List[Dict[str, Any]],
                          overall_metrics: Dict[str, float],
                          category_metrics: Dict[int, Dict[str, float]],
                          output_file: str):
-    """保存详细结果到JSON文件"""
+    """Save detailed results to JSON file"""
     
-    # 为每个结果添加指标
+    # Add metrics for each result
     detailed_results = []
     for result in results:
         predicted = result.get('answer', '')
@@ -359,53 +359,53 @@ def save_detailed_results(results: List[Dict[str, Any]],
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
     
-    print(f"\n详细结果已保存到: {output_file}")
+    print(f"\nDetailed results saved to: {output_file}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description='评估单轮QA结果（对齐AgenticMemory版本）')
+    parser = argparse.ArgumentParser(description='Evaluate single-round QA results (aligned with AgenticMemory version)')
     parser.add_argument('--results_dir', 
-                       default='/share/project/zyt/hyy/Memory/QA_system/output/qa_results_hierarchical_v3_two_stage_20260104_191206',
-                       help='QA结果目录路径')
+                       default='./qa_results',
+                       help='QA results directory path')
     parser.add_argument('--output_file', 
-                       default='/share/project/zyt/hyy/Memory/QA_system/test_output/qa_results_hierarchical_v3_two_stage_20260104_191514.json',
-                       help='输出文件路径')
+                       default='./output.json',
+                       help='Output file path')
     
     args = parser.parse_args()
-    print("开始评估单轮QA结果（对齐AgenticMemory评测）...")
-    print(f"结果目录: {args.results_dir}")
-    print("\n评测方法说明:")
-    print("1. F1/Precision/Recall: 基于集合的token-level计算（与代码二一致）")
-    print("2. BLEU: 使用nltk标准实现，包含brevity penalty和smoothing（与代码二一致）\n")
+    print("Starting evaluation of single-round QA results (aligned with AgenticMemory evaluation)...")
+    print(f"Results directory: {args.results_dir}")
+    print("\nEvaluation method description:")
+    print("1. F1/Precision/Recall: Set-based token-level calculation (consistent with code version 2)")
+    print("2. BLEU: Uses nltk standard implementation, includes brevity penalty and smoothing (consistent with code version 2)\n")
     
-    # 加载所有结果
+    # Load all results
     results = load_qa_results(args.results_dir)
     
     if not results:
-        print("没有找到任何QA结果!")
+        print("No QA results found!")
         return
     
-    # 计算总体指标
-    print("\n计算总体指标...")
+    # Calculate overall metrics
+    print("\nCalculating overall metrics...")
     overall_metrics = calculate_metrics_for_results(results)
-    print_metrics(overall_metrics, "总体指标")
+    print_metrics(overall_metrics, "Overall Metrics")
     
-    # 计算排除第5类的总体指标
-    print("\n计算排除第5类的总体指标...")
+    # Calculate overall metrics excluding category 5
+    print("\nCalculating overall metrics excluding category 5...")
     overall_metrics_without_cat5 = calculate_metrics_without_category(results, 5)
-    print_metrics(overall_metrics_without_cat5, "总体指标(排除第5类)")
+    print_metrics(overall_metrics_without_cat5, "Overall Metrics (excluding category 5)")
     
-    # 计算按category的指标
-    print("\n计算按Category的指标...")
+    # Calculate metrics by category
+    print("\nCalculating metrics by Category...")
     category_metrics = calculate_category_metrics(results)
     print_category_metrics(category_metrics)
     
-    # 保存详细结果
+    # Save detailed results
     save_detailed_results(results, overall_metrics, category_metrics, args.output_file)
     
-    print(f"\n评估完成!")
-    print(f"总共处理了 {len(results)} 个问题")
-    print(f"涉及 {len(category_metrics)} 个categories")
+    print(f"\nEvaluation complete!")
+    print(f"Processed {len(results)} questions in total")
+    print(f"Involving {len(category_metrics)} categories")
 
 
 if __name__ == "__main__":

@@ -16,17 +16,17 @@ Stage 2: Extract relations between the extracted events
 Usage examples:
 
 # 1) jsonl input (utterance-per-line)
-python Memory/build_graph/extract.py \
-  --input /home/u2021201791/workspace/Memory/data/locomo/dialog/dialog.jsonl \
-  --output /home/u2021201791/workspace/Memory/data/locomo/dialog/event_extractions.jsonl \
+python build_graph/extract.py \
+  --input /path/to/data/dialog/dialog.jsonl \
+  --output /path/to/data/dialog/event_extractions.jsonl \
   --api-url http://localhost:8000/v1 \
   --model Meta-Llama-3.1-8B-Instruct \
   --max-new-tokens 2048 --temperature 0.2
 
 # 2) locomo10.json input (array with "conversation")
 python extract.py \
-  --input /share/project/zyt/hyy/Memory/data/locomo/locomo10.json \
-  --output /share/project/zyt/hyy/Memory/build_graph/locomo10_events.jsonl \
+  --input /path/to/data/locomo10.json \
+  --output /path/to/output/locomo10_events.jsonl \
   --api-url http://localhost:8000/v1 \
   --model Qwen3-8B \
   --max-new-tokens 32768 --temperature 0.2 \

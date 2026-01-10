@@ -1,12 +1,12 @@
 #!/bin/bash
-# 启动 vLLM 服务 - Qwen3-8B
+# Start vLLM Service - Qwen3-8B
 
-# 模型路径
-MODEL_PATH="/share/project/zyt/hyy/Model/Qwen3-8B"
+# Model path
+MODEL_PATH="./models/Qwen3-8B"
 
-# 自动创建 .env 文件（如果不存在）
+# Automatically create .env file (if not exists)
 if [ ! -f ".env" ]; then
-    echo "创建 .env 配置文件..."
+    echo "Creating .env configuration file..."
     cat > .env << 'EOF'
 VLLM_BASE_URL=http://localhost:8006/v1
 VLLM_API_KEY=EMPTY
@@ -15,17 +15,17 @@ LLM_TEMPERATURE=0.6
 LLM_TOP_P=0.95
 LLM_MAX_TOKENS=32768
 EOF
-    echo "✓ .env 文件已创建"
+    echo "✓ .env file created"
 fi
 
-# 检查模型
+# Check model
 if [ ! -d "$MODEL_PATH" ]; then
-    echo "错误: 模型路径不存在: $MODEL_PATH"
+    echo "Error: Model path does not exist: $MODEL_PATH"
     exit 1
 fi
 
-# 解析GPU参数
-# 支持: ./start_vllm.sh --gpus 0,1,2 或 ./start_vllm.sh 0,1,2 或 CUDA_VISIBLE_DEVICES=0,1,2 ./start_vllm.sh
+# Parse GPU parameters
+# Supported: ./start_vllm.sh --gpus 0,1,2 or ./start_vllm.sh 0,1,2 or CUDA_VISIBLE_DEVICES=0,1,2 ./start_vllm.sh
 GPU_IDS=""
 if [ "$1" = "--gpus" ] && [ -n "$2" ]; then
     GPU_IDS="$2"
@@ -35,21 +35,21 @@ elif [ -n "$CUDA_VISIBLE_DEVICES" ]; then
     GPU_IDS="$CUDA_VISIBLE_DEVICES"
 fi
 
-# 检测GPU数量
+# Detect GPU count
 if command -v nvidia-smi &> /dev/null; then
     TOTAL_GPU_COUNT=$(nvidia-smi --list-gpus | wc -l)
     if [ -n "$GPU_IDS" ]; then
-        # 使用指定的GPU
+        # Use specified GPUs
         GPU_COUNT=$(echo "$GPU_IDS" | tr ',' '\n' | wc -l)
         export CUDA_VISIBLE_DEVICES="$GPU_IDS"
-        echo "指定使用GPU: $GPU_IDS (共 $GPU_COUNT 个)"
+        echo "Using specified GPUs: $GPU_IDS (total: $GPU_COUNT)"
     else
-        # 使用所有GPU
+        # Use all GPUs
         GPU_COUNT=$TOTAL_GPU_COUNT
         if [ $GPU_COUNT -gt 1 ]; then
-            echo "检测到 $GPU_COUNT 个GPU，启用多卡运行"
+            echo "Detected $GPU_COUNT GPUs, enabling multi-GPU mode"
         else
-            echo "检测到 $GPU_COUNT 个GPU，使用单GPU模式"
+            echo "Detected $GPU_COUNT GPU, using single GPU mode"
         fi
     fi
 else
@@ -57,21 +57,21 @@ else
     if [ -n "$GPU_IDS" ]; then
         export CUDA_VISIBLE_DEVICES="$GPU_IDS"
         GPU_COUNT=$(echo "$GPU_IDS" | tr ',' '\n' | wc -l)
-        echo "指定使用GPU: $GPU_IDS (共 $GPU_COUNT 个)"
+        echo "Using specified GPUs: $GPU_IDS (total: $GPU_COUNT)"
     else
-        echo "未检测到GPU，使用单GPU模式"
+        echo "No GPU detected, using single GPU mode"
     fi
 fi
 
-# 启动 vLLM
-echo "启动 vLLM 服务..."
-echo "模型: $MODEL_PATH"
-echo "GPU数量: $GPU_COUNT"
+# Start vLLM
+echo "Starting vLLM service..."
+echo "Model: $MODEL_PATH"
+echo "GPU count: $GPU_COUNT"
 if [ $GPU_COUNT -gt 1 ]; then
-    echo "多卡模式: Tensor Parallel Size = $GPU_COUNT"
+    echo "Multi-GPU mode: Tensor Parallel Size = $GPU_COUNT"
 fi
 if [ -n "$GPU_IDS" ]; then
-    echo "使用的GPU ID: $GPU_IDS"
+    echo "Using GPU IDs: $GPU_IDS"
 fi
 echo ""
 
